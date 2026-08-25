@@ -85,6 +85,20 @@ uvicorn main:app --reload
 Then open **http://127.0.0.1:8000** — the FastAPI app serves the
 frontend directly, so there's no separate frontend server to run.
 
+### Free YouTube deployment without a proxy
+
+Render may be unable to reach YouTube from its cloud IP. To run the full app
+from your own connection for free, install `cloudflared`, then run this from
+the project folder in PowerShell:
+
+```powershell
+.\run_local_tunnel.ps1
+```
+
+Open the `https://` URL printed by Cloudflare. Keep that terminal and your
+computer running while using the app. This URL routes to your local backend,
+so use it instead of the Render URL for YouTube analysis.
+
 ## API reference
 
 ### `GET /health`
