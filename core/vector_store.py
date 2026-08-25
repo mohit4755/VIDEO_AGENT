@@ -10,11 +10,9 @@ VECTOR_DB_DIR so it survives restarts if you want to re-ask questions later.
 
 import os
 from langchain_community.vectorstores import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 VECTOR_DB_DIR = os.getenv("VECTOR_DB_DIR", "vector_db")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
 os.makedirs(VECTOR_DB_DIR, exist_ok=True)
 
@@ -24,7 +22,14 @@ _embeddings = None
 def get_embeddings():
     global _embeddings
     if _embeddings is None:
-        _embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+        api_key = os.getenv("MISTRAL_API_KEY")
+        if api_key:
+            from langchain_mistralai import MistralAIEmbeddings
+            _embeddings = MistralAIEmbeddings(mistral_api_key=api_key)
+        else:
+            from langchain_huggingface import HuggingFaceEmbeddings
+            embedding_model = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+            _embeddings = HuggingFaceEmbeddings(model_name=embedding_model)
     return _embeddings
 
 
