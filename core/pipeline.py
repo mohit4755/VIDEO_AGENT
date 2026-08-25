@@ -18,7 +18,6 @@ from dotenv import load_dotenv
 from utils.audio_processor import (
     is_valid_youtube_url,
     get_video_id,
-    fetch_video_title,
     get_captions_transcript,
     process_input,
     cleanup_chunks,
@@ -45,14 +44,6 @@ def analyze_video(url: str, language: str = "english") -> dict:
 
     video_id = get_video_id(url)
 
-    try:
-        video_title = fetch_video_title(url)
-    except Exception as e:
-        # YouTube may throttle metadata requests while captions still work.
-        # Keep analysis available with a stable fallback title.
-        print(f"Video title lookup failed ({type(e).__name__}: {e})")
-        video_title = f"YouTube video {video_id}"
-
     # ── Step 1: try the fast captions path first ────────────────────────
     transcript = get_captions_transcript(video_id)
     source_used = "captions"
@@ -78,6 +69,10 @@ def analyze_video(url: str, language: str = "english") -> dict:
         raise VideoProcessingError(
             "This video doesn't have usable captions or speech content to summarize."
         )
+
+    # Title metadata requires a separate yt-dlp request and is often
+    # rate-limited on hosted services, so keep analysis independent of it.
+    video_title = f"YouTube video {video_id}"
 
     # ── Step 3: summarize + extract structured info ─────────────────────
     try:
