@@ -20,9 +20,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-from core.pipeline import analyze_video, VideoProcessingError
-
 load_dotenv()
+
+from core.pipeline import analyze_video, VideoProcessingError
 
 app = FastAPI(title="Video Agent API", version="1.0.0")
 
