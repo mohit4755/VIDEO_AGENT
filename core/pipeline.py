@@ -16,6 +16,8 @@ Flow:
 from dotenv import load_dotenv
 import os
 
+load_dotenv()
+
 from utils.audio_processor import (
     is_valid_youtube_url,
     get_video_id,
@@ -25,8 +27,6 @@ from utils.audio_processor import (
 )
 from core.summarizer import summarize_short, summarize_detailed, generate_title
 from core.extractor import extract_key_points, extract_keywords
-
-load_dotenv()
 
 TRANSCRIPT_PREVIEW_CHARS = 1200
 
