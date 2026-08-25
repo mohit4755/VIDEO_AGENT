@@ -14,6 +14,7 @@ Flow:
 """
 
 from dotenv import load_dotenv
+import os
 
 from utils.audio_processor import (
     is_valid_youtube_url,
@@ -50,6 +51,11 @@ def analyze_video(url: str, language: str = "english") -> dict:
 
     # ── Step 2: fall back to download + Whisper if no captions exist ────
     if not transcript:
+        if not os.getenv("YOUTUBE_PROXY"):
+            raise VideoProcessingError(
+                "YouTube is blocking requests from Render. Configure a working "
+                "YOUTUBE_PROXY in Render, then try again."
+            )
         source_used = "audio_transcription"
         chunks = []
         try:

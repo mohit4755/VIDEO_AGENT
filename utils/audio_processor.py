@@ -27,6 +27,7 @@ from youtube_transcript_api._errors import (
     NoTranscriptFound,
     VideoUnavailable,
 )
+from youtube_transcript_api.proxies import GenericProxyConfig
 
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -34,6 +35,7 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 YOUTUBE_ID_REGEX = re.compile(
     r"(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{11})"
 )
+YOUTUBE_PROXY = os.getenv("YOUTUBE_PROXY")
 
 
 # ── URL validation / metadata ────────────────────────────────────────────────
@@ -75,7 +77,12 @@ def get_captions_transcript(video_id: str) -> str | None:
     """
     try:
         if hasattr(YouTubeTranscriptApi, "list"):
-            api = YouTubeTranscriptApi()
+            proxy_config = (
+                GenericProxyConfig(http_url=YOUTUBE_PROXY, https_url=YOUTUBE_PROXY)
+                if YOUTUBE_PROXY
+                else None
+            )
+            api = YouTubeTranscriptApi(proxy_config=proxy_config)
             transcript_list = api.list(video_id)
         elif hasattr(YouTubeTranscriptApi, "list_transcripts"):
             transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
@@ -125,6 +132,8 @@ def download_youtube_audio(url: str) -> str:
         ],
         "quiet": True,
     }
+    if YOUTUBE_PROXY:
+        ydl_opts["proxy"] = YOUTUBE_PROXY
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         filename = ydl.prepare_filename(info).replace(".webm", ".wav").replace(".m4a", ".wav")
