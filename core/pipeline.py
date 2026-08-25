@@ -21,10 +21,8 @@ from utils.audio_processor import (
     is_valid_youtube_url,
     get_video_id,
     get_captions_transcript,
-    process_input,
-    cleanup_chunks,
 )
-from core.summarizer import summarize_short, summarize_detailed, generate_title
+from core.summarizer import summarize_short, summarize_detailed
 from core.extractor import extract_key_points, extract_keywords
 
 TRANSCRIPT_PREVIEW_CHARS = 1200
@@ -32,40 +30,6 @@ TRANSCRIPT_PREVIEW_CHARS = 1200
 
 class VideoProcessingError(Exception):
     """Raised for any recoverable failure while analyzing a video."""
-
-
-def analyze_transcript(
-    transcript: str,
-    video_id: str = "uploaded-transcript",
-    video_title: str = "Uploaded transcript",
-    source_used: str = "uploaded_transcript",
-) -> dict:
-    transcript = transcript.strip()
-    if not transcript or len(transcript) < 20:
-        raise VideoProcessingError("The transcript file does not contain enough text to summarize.")
-
-    try:
-        short_summary = summarize_short(transcript)
-        detailed_summary = summarize_detailed(transcript)
-        key_points = extract_key_points(transcript)
-        keywords = extract_keywords(transcript)
-    except Exception as e:
-        raise VideoProcessingError(f"AI analysis failed: {e}") from e
-
-    return {
-        "status": "success",
-        "video_id": video_id,
-        "video_title": video_title,
-        "source_used": source_used,
-        "short_summary": short_summary.strip(),
-        "detailed_summary": detailed_summary.strip(),
-        "key_points": key_points,
-        "keywords": keywords,
-        "transcript_preview": transcript[:TRANSCRIPT_PREVIEW_CHARS].strip()
-        + ("..." if len(transcript) > TRANSCRIPT_PREVIEW_CHARS else ""),
-        "transcript_full": transcript,
-        "error": None,
-    }
 
 
 def analyze_video(url: str, language: str = "english") -> dict:
@@ -84,29 +48,35 @@ def analyze_video(url: str, language: str = "english") -> dict:
 
     # ── Step 2: fall back to download + Whisper if no captions exist ────
     if not transcript:
-        source_used = "audio_transcription"
-        chunks = []
-        try:
-            # Whisper/Torch is only needed when captions are unavailable.
-            from core.transcriber import transcribe_all
-
-            chunks = process_input(url)
-            transcript = transcribe_all(chunks, language=language)
-        except Exception as e:
-            raise VideoProcessingError(
-                f"Could not process this video's audio: {e}"
-            )
-        finally:
-            cleanup_chunks(chunks)
+        raise VideoProcessingError(
+            "YouTube captions are unavailable from this server. "
+            "Audio fallback is disabled because this service does not use a proxy."
+        )
 
     if not transcript or len(transcript.strip()) < 20:
         raise VideoProcessingError(
             "This video doesn't have usable captions or speech content to summarize."
         )
 
-    return analyze_transcript(
-        transcript,
-        video_id=video_id,
-        video_title=f"YouTube video {video_id}",
-        source_used=source_used,
-    )
+    try:
+        short_summary = summarize_short(transcript)
+        detailed_summary = summarize_detailed(transcript)
+        key_points = extract_key_points(transcript)
+        keywords = extract_keywords(transcript)
+    except Exception as e:
+        raise VideoProcessingError(f"AI analysis failed: {e}") from e
+
+    return {
+        "status": "success",
+        "video_id": video_id,
+        "video_title": f"YouTube video {video_id}",
+        "source_used": "captions",
+        "short_summary": short_summary.strip(),
+        "detailed_summary": detailed_summary.strip(),
+        "key_points": key_points,
+        "keywords": keywords,
+        "transcript_preview": transcript[:TRANSCRIPT_PREVIEW_CHARS].strip()
+        + ("..." if len(transcript) > TRANSCRIPT_PREVIEW_CHARS else ""),
+        "transcript_full": transcript,
+        "error": None,
+    }

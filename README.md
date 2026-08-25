@@ -75,6 +75,7 @@ You need an FFmpeg-capable system. The Docker image installs FFmpeg directly.
 RAG chat is disabled by default on Render's free instance to avoid memory
 limits. Set `ENABLE_RAG=true` only on an instance with enough memory.
 
+
 ## Run
 
 ```bash
@@ -85,11 +86,6 @@ Then open **http://127.0.0.1:8000** — the FastAPI app serves the
 frontend directly, so there's no separate frontend server to run.
 
 ## API reference
-
-### `POST /analyze-upload`
-
-Upload a `.txt`, `.srt`, or `.vtt` transcript file as the `file` form field.
-This path does not contact YouTube and works on Render without a proxy.
 
 ### `GET /health`
 ```json
