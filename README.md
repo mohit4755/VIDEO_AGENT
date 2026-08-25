@@ -85,6 +85,9 @@ YOUTUBE_PROXY=http://username:password@proxy-host:port
 Do not commit proxy credentials to the repository. After adding the variable,
 redeploy the service.
 
+RAG chat is disabled by default on Render's free instance to avoid memory
+limits. Set `ENABLE_RAG=true` only on an instance with enough memory.
+
 ## Run
 
 ```bash

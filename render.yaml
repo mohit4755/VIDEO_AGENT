@@ -23,3 +23,5 @@ services:
         value: vector_db
       - key: EMBEDDING_COLLECTION
         value: video_transcripts_mistral
+      - key: ENABLE_RAG
+        value: "false"

@@ -13,6 +13,8 @@ Run with:
   uvicorn main:app --reload
 """
 
+import os
+
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -103,13 +105,15 @@ def analyze(payload: AnalyzeRequest, background_tasks: BackgroundTasks):
         # Unexpected failure -> still respond gracefully
         raise HTTPException(status_code=500, detail=f"Unexpected server error: {e}")
 
-    # Do not make the user wait for optional embedding/indexing work.
+    # RAG can exceed the free instance memory limit. Enable it explicitly
+    # when a larger instance or a compatible embedding backend is available.
     _last_rag_chain = None
-    background_tasks.add_task(
-        build_rag_in_background,
-        result["transcript_full"],
-        result["video_id"],
-    )
+    if os.getenv("ENABLE_RAG", "false").lower() == "true":
+        background_tasks.add_task(
+            build_rag_in_background,
+            result["transcript_full"],
+            result["video_id"],
+        )
 
     # Don't ship the full transcript back over the wire by default.
     response = {k: v for k, v in result.items() if k != "transcript_full"}
