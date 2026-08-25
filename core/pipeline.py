@@ -14,6 +14,9 @@ Flow:
 """
 
 from dotenv import load_dotenv
+import json
+import os
+import re
 
 load_dotenv()
 
@@ -22,8 +25,9 @@ from utils.audio_processor import (
     get_video_id,
     get_captions_transcript,
 )
-from core.summarizer import summarize_short, summarize_detailed
-from core.extractor import extract_key_points, extract_keywords
+from langchain_mistralai import ChatMistralAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
 TRANSCRIPT_PREVIEW_CHARS = 1200
 
@@ -59,10 +63,32 @@ def analyze_video(url: str, language: str = "english") -> dict:
         )
 
     try:
-        short_summary = summarize_short(transcript)
-        detailed_summary = summarize_detailed(transcript)
-        key_points = extract_key_points(transcript)
-        keywords = extract_keywords(transcript)
+        llm = ChatMistralAI(
+            model="mistral-small-latest",
+            mistral_api_key=os.getenv("MISTRAL_API_KEY"),
+            temperature=0.2,
+        )
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    "Analyze the transcript and return ONLY valid JSON with keys "
+                    "short_summary, detailed_summary, key_points, and keywords. "
+                    "key_points and keywords must be arrays of strings.",
+                ),
+                ("human", "{transcript}"),
+            ]
+        )
+        sample = transcript[:12000]
+        raw = (prompt | llm | StrOutputParser()).invoke({"transcript": sample})
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not match:
+            raise ValueError("AI response was not valid JSON")
+        analysis = json.loads(match.group(0))
+        short_summary = str(analysis.get("short_summary", "")).strip()
+        detailed_summary = str(analysis.get("detailed_summary", "")).strip()
+        key_points = [str(item) for item in analysis.get("key_points", [])]
+        keywords = [str(item) for item in analysis.get("keywords", [])]
     except Exception as e:
         raise VideoProcessingError(f"AI analysis failed: {e}") from e
 
