@@ -27,5 +27,5 @@ COPY --chown=user . .
 # Expose default Hugging Face Spaces port
 EXPOSE 7860
 
-# Run FastAPI app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Render supplies PORT for web services; keep 7860 as the local/HF fallback.
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-7860}"]

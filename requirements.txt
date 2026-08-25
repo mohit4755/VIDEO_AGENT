@@ -13,7 +13,6 @@ youtube-transcript-api>=0.6.2  # fast path: pull existing captions directly
 # ── Audio / Video processing (fallback path only) ───────────────────────────
 pydub>=0.25.1
 ffmpeg-python>=0.2.0
-static-ffmpeg>=3.0
 
 # ── Speech-to-Text (fallback path only) ─────────────────────────────────────
 openai-whisper>=20231117

@@ -21,7 +21,6 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 from core.pipeline import analyze_video, VideoProcessingError
-from core.rag_engine import build_rag_chain, ask_question
 
 load_dotenv()
 
@@ -91,6 +90,8 @@ def analyze(payload: AnalyzeRequest):
     # Build the RAG chain in the background-ish (synchronously, kept simple)
     # so the optional /ask endpoint works right after analysis.
     try:
+        from core.rag_engine import build_rag_chain
+
         _last_rag_chain = build_rag_chain(result["transcript_full"])
         _last_video_id = result["video_id"]
     except Exception as e:
@@ -112,6 +113,8 @@ def ask(payload: AskRequest):
             detail="Analyze a video first before asking questions about it.",
         )
     try:
+        from core.rag_engine import ask_question
+
         answer = ask_question(_last_rag_chain, payload.question)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not answer: {e}")

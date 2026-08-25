@@ -19,9 +19,6 @@ import os
 import re
 from urllib.parse import urlparse, parse_qs
 
-import static_ffmpeg
-static_ffmpeg.add_paths()
-
 import yt_dlp
 from pydub import AudioSegment
 from youtube_transcript_api import YouTubeTranscriptApi

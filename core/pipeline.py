@@ -23,7 +23,6 @@ from utils.audio_processor import (
     process_input,
     cleanup_chunks,
 )
-from core.transcriber import transcribe_all
 from core.summarizer import summarize_short, summarize_detailed, generate_title
 from core.extractor import extract_key_points, extract_keywords
 
@@ -60,6 +59,9 @@ def analyze_video(url: str, language: str = "english") -> dict:
         source_used = "audio_transcription"
         chunks = []
         try:
+            # Whisper/Torch is only needed when captions are unavailable.
+            from core.transcriber import transcribe_all
+
             chunks = process_input(url)
             transcript = transcribe_all(chunks, language=language)
         except Exception as e:
