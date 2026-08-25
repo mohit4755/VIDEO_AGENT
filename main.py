@@ -13,7 +13,7 @@ Run with:
   uvicorn main:app --reload
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -70,8 +70,19 @@ def health():
     return {"status": "ok"}
 
 
+def build_rag_in_background(transcript: str, video_id: str) -> None:
+    global _last_rag_chain, _last_video_id
+    try:
+        from core.rag_engine import build_rag_chain
+
+        _last_rag_chain = build_rag_chain(transcript)
+        _last_video_id = video_id
+    except Exception as e:
+        print(f"RAG chain build failed (chat will be unavailable): {e}")
+
+
 @app.post("/analyze")
-def analyze(payload: AnalyzeRequest):
+def analyze(payload: AnalyzeRequest, background_tasks: BackgroundTasks):
     global _last_rag_chain, _last_video_id
 
     try:
@@ -92,18 +103,13 @@ def analyze(payload: AnalyzeRequest):
         # Unexpected failure -> still respond gracefully
         raise HTTPException(status_code=500, detail=f"Unexpected server error: {e}")
 
-    # Build the RAG chain in the background-ish (synchronously, kept simple)
-    # so the optional /ask endpoint works right after analysis.
-    try:
-        from core.rag_engine import build_rag_chain
-
-        _last_rag_chain = build_rag_chain(result["transcript_full"])
-        _last_video_id = result["video_id"]
-    except Exception as e:
-        # Don't fail the whole analysis if RAG indexing has an issue —
-        # the summary is still useful without chat.
-        print(f"RAG chain build failed (chat will be unavailable): {e}")
-        _last_rag_chain = None
+    # Do not make the user wait for optional embedding/indexing work.
+    _last_rag_chain = None
+    background_tasks.add_task(
+        build_rag_in_background,
+        result["transcript_full"],
+        result["video_id"],
+    )
 
     # Don't ship the full transcript back over the wire by default.
     response = {k: v for k, v in result.items() if k != "transcript_full"}

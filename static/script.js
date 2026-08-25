@@ -34,6 +34,12 @@ const STATUS_STEPS = [
 let statusTimer = null;
 const ANALYZE_TIMEOUT_MS = 120000;
 
+function normalizeYouTubeUrl(value) {
+  if (value.startsWith("//")) return `https:${value}`;
+  if (!/^https?:\/\//i.test(value)) return `https://${value}`;
+  return value;
+}
+
 function showStatus() {
   hide(errorZone);
   hide(resultsZone);
@@ -107,7 +113,7 @@ function renderResults(data) {
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const url = urlInput.value.trim();
+  const url = normalizeYouTubeUrl(urlInput.value.trim());
   const language = languageSelect.value;
   if (!url) return;
 
