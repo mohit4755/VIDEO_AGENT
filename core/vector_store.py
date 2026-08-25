@@ -13,6 +13,7 @@ from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 VECTOR_DB_DIR = os.getenv("VECTOR_DB_DIR", "vector_db")
+EMBEDDING_COLLECTION = os.getenv("EMBEDDING_COLLECTION", "video_transcripts_mistral")
 
 os.makedirs(VECTOR_DB_DIR, exist_ok=True)
 
@@ -42,6 +43,7 @@ def build_vector_store(transcript: str):
         documents=docs,
         embedding=get_embeddings(),
         persist_directory=VECTOR_DB_DIR,
+        collection_name=EMBEDDING_COLLECTION,
     )
     return vector_store
 
@@ -51,6 +53,7 @@ def load_vector_store():
     return Chroma(
         persist_directory=VECTOR_DB_DIR,
         embedding_function=get_embeddings(),
+        collection_name=EMBEDDING_COLLECTION,
     )
 
 

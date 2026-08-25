@@ -32,6 +32,7 @@ const STATUS_STEPS = [
 ];
 
 let statusTimer = null;
+const ANALYZE_TIMEOUT_MS = 120000;
 
 function showStatus() {
   hide(errorZone);
@@ -114,11 +115,15 @@ form.addEventListener("submit", async (e) => {
   showStatus();
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ANALYZE_TIMEOUT_MS);
     const res = await fetch("/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, language }),
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     const data = await res.json();
 
@@ -134,7 +139,11 @@ form.addEventListener("submit", async (e) => {
 
     renderResults(data);
   } catch (err) {
-    showError("Couldn't reach the server. Is the backend running?");
+    if (err.name === "AbortError") {
+      showError("Analysis is taking too long. Try a shorter video or try again.");
+    } else {
+      showError("The analysis request failed. Check the server logs and try again.");
+    }
   } finally {
     analyzeBtn.disabled = false;
   }

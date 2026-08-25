@@ -21,3 +21,5 @@ services:
         value: sentence-transformers/all-MiniLM-L6-v2
       - key: VECTOR_DB_DIR
         value: vector_db
+      - key: EMBEDDING_COLLECTION
+        value: video_transcripts_mistral
