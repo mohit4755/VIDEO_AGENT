@@ -60,6 +60,11 @@ def serve_frontend():
     return FileResponse("static/index.html")
 
 
+@app.head("/")
+def probe_frontend():
+    return FileResponse("static/index.html")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}

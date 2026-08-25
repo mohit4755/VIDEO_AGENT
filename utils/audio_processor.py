@@ -24,6 +24,7 @@ from pydub import AudioSegment
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
     IpBlocked,
+    RequestBlocked,
     TranscriptsDisabled,
     NoTranscriptFound,
     VideoUnavailable,
@@ -109,7 +110,7 @@ def get_captions_transcript(video_id: str) -> str | None:
 
         joined = " ".join(texts)
         return joined.strip() or None
-    except IpBlocked:
+    except (IpBlocked, RequestBlocked):
         raise RuntimeError(
             "YouTube blocked Render's cloud IP. Set YOUTUBE_PROXY to a working "
             "residential proxy in Render."
