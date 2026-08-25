@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Video Agent — turn any YouTube video into a summary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="wordmark">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        Video&nbsp;Agent
+      </div>
+      <div class="eyebrow">yt url → transcript → summary</div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============ HERO ============ -->
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div class="hero-copy">
+          <p class="kicker">for students, researchers &amp; the terminally busy</p>
+          <h1>Watch less.<br>Know just as much.</h1>
+          <p class="lede">
+            Paste a YouTube link. Video Agent pulls the transcript, reads the
+            whole thing, and hands you back the short version — a summary,
+            the key points, and the keywords worth remembering.
+          </p>
+
+          <form id="analyze-form" class="analyze-form" autocomplete="off">
+            <div class="input-row">
+              <label for="url-input" class="sr-only">YouTube URL</label>
+              <input
+                id="url-input"
+                name="url"
+                type="url"
+                inputmode="url"
+                placeholder="https://www.youtube.com/watch?v=…"
+                required
+              />
+              <button type="submit" id="analyze-btn" class="btn-primary">
+                <span class="btn-label">Analyze</span>
+                <svg class="btn-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+            <div class="input-meta">
+              <label class="lang-select">
+                <span>Spoken language</span>
+                <select id="language-select" name="language">
+                  <option value="english" selected>English</option>
+                  <option value="hinglish">Hindi / Hinglish</option>
+                </select>
+              </label>
+              <span class="hint">Works best on videos under ~45 minutes.</span>
+            </div>
+          </form>
+        </div>
+
+        <div class="hero-visual" aria-hidden="true">
+          <div class="scrubber">
+            <div class="scrubber-label">
+              <span>00:00</span><span>ANALYZING</span><span>END</span>
+            </div>
+            <div class="scrubber-track">
+              <div class="scrubber-fill"></div>
+              <div class="scrubber-playhead"></div>
+            </div>
+            <div class="unspool">
+              <span class="line l1"></span>
+              <span class="line l2"></span>
+              <span class="line l3"></span>
+              <span class="line l4"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ STATUS / LOADING ============ -->
+    <section class="wrap status-zone" id="status-zone" hidden>
+      <div class="status-card" id="status-card">
+        <div class="status-spinner" aria-hidden="true"></div>
+        <div class="status-text">
+          <p class="status-title" id="status-title">Fetching transcript…</p>
+          <p class="status-sub" id="status-sub">This is usually the fast part.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ERROR ============ -->
+    <section class="wrap error-zone" id="error-zone" hidden>
+      <div class="error-card">
+        <p class="error-title">Couldn't analyze that video</p>
+        <p class="error-body" id="error-message"></p>
+      </div>
+    </section>
+
+    <!-- ============ RESULTS ============ -->
+    <section class="wrap results-zone" id="results-zone" hidden>
+
+      <div class="result-header">
+        <span class="source-badge" id="source-badge">captions</span>
+        <h2 id="video-title">Video title</h2>
+      </div>
+
+      <div class="results-grid">
+
+        <article class="card card-summary">
+          <div class="card-head">
+            <h3>Quick summary</h3>
+            <button class="copy-btn" data-copy-target="short-summary-text">Copy</button>
+          </div>
+          <p id="short-summary-text" class="card-body"></p>
+        </article>
+
+        <article class="card card-summary">
+          <div class="card-head">
+            <h3>Detailed summary</h3>
+            <button class="copy-btn" data-copy-target="detailed-summary-text">Copy</button>
+          </div>
+          <p id="detailed-summary-text" class="card-body"></p>
+        </article>
+
+        <article class="card card-keypoints">
+          <div class="card-head">
+            <h3>Key points</h3>
+            <button class="copy-btn" data-copy-target="key-points-list">Copy</button>
+          </div>
+          <ul id="key-points-list" class="key-points"></ul>
+        </article>
+
+        <article class="card card-keywords">
+          <div class="card-head">
+            <h3>Keywords</h3>
+            <button class="copy-btn" data-copy-target="keywords-list">Copy</button>
+          </div>
+          <div id="keywords-list" class="keyword-pills"></div>
+        </article>
+
+        <article class="card card-transcript">
+          <div class="card-head">
+            <h3>Transcript preview</h3>
+            <button class="copy-btn" data-copy-target="transcript-text">Copy</button>
+          </div>
+          <p id="transcript-text" class="card-body mono"></p>
+        </article>
+
+        <article class="card card-ask">
+          <div class="card-head">
+            <h3>Ask about this video</h3>
+          </div>
+          <form id="ask-form" class="ask-form">
+            <input id="ask-input" type="text" placeholder="e.g. What does the speaker recommend at the end?" required />
+            <button type="submit" class="btn-secondary">Ask</button>
+          </form>
+          <div id="ask-answer" class="ask-answer" hidden></div>
+        </article>
+
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Video Agent — FastAPI backend, no fluff frontend.</p>
+    </div>
+  </footer>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>
