@@ -48,7 +48,10 @@ def analyze_video(url: str, language: str = "english") -> dict:
     try:
         video_title = fetch_video_title(url)
     except Exception as e:
-        raise VideoProcessingError(f"Couldn't fetch video info: {e}")
+        # YouTube may throttle metadata requests while captions still work.
+        # Keep analysis available with a stable fallback title.
+        print(f"Video title lookup failed ({type(e).__name__}: {e})")
+        video_title = f"YouTube video {video_id}"
 
     # ── Step 1: try the fast captions path first ────────────────────────
     transcript = get_captions_transcript(video_id)
