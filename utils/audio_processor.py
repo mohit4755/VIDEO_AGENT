@@ -17,6 +17,7 @@ main.py can react accordingly (skip Whisper if captions were found).
 
 import os
 import re
+import requests
 from urllib.parse import urlparse, parse_qs
 
 import yt_dlp
@@ -34,6 +35,12 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 YOUTUBE_ID_REGEX = re.compile(
     r"(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{11})"
 )
+
+
+class YouTubeSession(requests.Session):
+    def request(self, method, url, **kwargs):
+        kwargs.setdefault("timeout", 15)
+        return super().request(method, url, **kwargs)
 
 
 # ── URL validation / metadata ────────────────────────────────────────────────
@@ -75,7 +82,7 @@ def get_captions_transcript(video_id: str) -> str | None:
     """
     try:
         if hasattr(YouTubeTranscriptApi, "list"):
-            api = YouTubeTranscriptApi()
+            api = YouTubeTranscriptApi(http_client=YouTubeSession())
             transcript_list = api.list(video_id)
         elif hasattr(YouTubeTranscriptApi, "list_transcripts"):
             transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
