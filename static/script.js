@@ -4,6 +4,8 @@ const form = document.getElementById("analyze-form");
 const urlInput = document.getElementById("url-input");
 const languageSelect = document.getElementById("language-select");
 const analyzeBtn = document.getElementById("analyze-btn");
+const uploadForm = document.getElementById("upload-form");
+const transcriptFile = document.getElementById("transcript-file");
 
 const statusZone = document.getElementById("status-zone");
 const statusTitle = document.getElementById("status-title");
@@ -150,6 +152,31 @@ form.addEventListener("submit", async (e) => {
     } else {
       showError("The analysis request failed. Check the server logs and try again.");
     }
+  } finally {
+    analyzeBtn.disabled = false;
+  }
+});
+
+uploadForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const file = transcriptFile.files[0];
+  if (!file) return;
+
+  analyzeBtn.disabled = true;
+  showStatus();
+  const body = new FormData();
+  body.append("file", file);
+
+  try {
+    const res = await fetch("/analyze-upload", { method: "POST", body });
+    const data = await res.json();
+    if (!res.ok || data.status === "error") {
+      showError(data.detail || data.error || "Couldn't analyze that transcript.");
+      return;
+    }
+    renderResults(data);
+  } catch {
+    showError("The transcript upload failed. Please try again.");
   } finally {
     analyzeBtn.disabled = false;
   }

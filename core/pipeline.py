@@ -35,6 +35,40 @@ class VideoProcessingError(Exception):
     """Raised for any recoverable failure while analyzing a video."""
 
 
+def analyze_transcript(
+    transcript: str,
+    video_id: str = "uploaded-transcript",
+    video_title: str = "Uploaded transcript",
+    source_used: str = "uploaded_transcript",
+) -> dict:
+    transcript = transcript.strip()
+    if not transcript or len(transcript) < 20:
+        raise VideoProcessingError("The transcript file does not contain enough text to summarize.")
+
+    try:
+        short_summary = summarize_short(transcript)
+        detailed_summary = summarize_detailed(transcript)
+        key_points = extract_key_points(transcript)
+        keywords = extract_keywords(transcript)
+    except Exception as e:
+        raise VideoProcessingError(f"AI analysis failed: {e}") from e
+
+    return {
+        "status": "success",
+        "video_id": video_id,
+        "video_title": video_title,
+        "source_used": source_used,
+        "short_summary": short_summary.strip(),
+        "detailed_summary": detailed_summary.strip(),
+        "key_points": key_points,
+        "keywords": keywords,
+        "transcript_preview": transcript[:TRANSCRIPT_PREVIEW_CHARS].strip()
+        + ("..." if len(transcript) > TRANSCRIPT_PREVIEW_CHARS else ""),
+        "transcript_full": transcript,
+        "error": None,
+    }
+
+
 def analyze_video(url: str, language: str = "english") -> dict:
     url = (url or "").strip()
     if not url:
@@ -79,30 +113,9 @@ def analyze_video(url: str, language: str = "english") -> dict:
             "This video doesn't have usable captions or speech content to summarize."
         )
 
-    # Title metadata requires a separate yt-dlp request and is often
-    # rate-limited on hosted services, so keep analysis independent of it.
-    video_title = f"YouTube video {video_id}"
-
-    # ── Step 3: summarize + extract structured info ─────────────────────
-    try:
-        short_summary = summarize_short(transcript)
-        detailed_summary = summarize_detailed(transcript)
-        key_points = extract_key_points(transcript)
-        keywords = extract_keywords(transcript)
-    except Exception as e:
-        raise VideoProcessingError(f"AI analysis failed: {e}")
-
-    return {
-        "status": "success",
-        "video_id": video_id,
-        "video_title": video_title,
-        "source_used": source_used,
-        "short_summary": short_summary.strip(),
-        "detailed_summary": detailed_summary.strip(),
-        "key_points": key_points,
-        "keywords": keywords,
-        "transcript_preview": transcript[:TRANSCRIPT_PREVIEW_CHARS].strip()
-        + ("..." if len(transcript) > TRANSCRIPT_PREVIEW_CHARS else ""),
-        "transcript_full": transcript,
-        "error": None,
-    }
+    return analyze_transcript(
+        transcript,
+        video_id=video_id,
+        video_title=f"YouTube video {video_id}",
+        source_used=source_used,
+    )

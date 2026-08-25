@@ -99,6 +99,11 @@ frontend directly, so there's no separate frontend server to run.
 
 ## API reference
 
+### `POST /analyze-upload`
+
+Upload a `.txt`, `.srt`, or `.vtt` transcript file as the `file` form field.
+This path does not contact YouTube and works on Render without a proxy.
+
 ### `GET /health`
 ```json
 { "status": "ok" }

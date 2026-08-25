@@ -15,7 +15,7 @@ Run with:
 
 import os
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from core.pipeline import analyze_video, VideoProcessingError
+from core.pipeline import analyze_transcript, analyze_video, VideoProcessingError
 
 app = FastAPI(title="Video Agent API", version="1.0.0")
 
@@ -118,6 +118,54 @@ def analyze(payload: AnalyzeRequest, background_tasks: BackgroundTasks):
     # Don't ship the full transcript back over the wire by default.
     response = {k: v for k, v in result.items() if k != "transcript_full"}
     return response
+
+
+@app.post("/analyze-upload")
+async def analyze_upload(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+):
+    global _last_rag_chain
+
+    allowed_extensions = (".txt", ".srt", ".vtt")
+    filename = file.filename or "transcript.txt"
+    if not filename.lower().endswith(allowed_extensions):
+        return {"status": "error", "error": "Upload a .txt, .srt, or .vtt transcript file."}
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        return {"status": "error", "error": "Transcript files must be 5 MB or smaller."}
+
+    text = content.decode("utf-8-sig", errors="replace")
+    if filename.lower().endswith((".srt", ".vtt")):
+        import re
+
+        text = re.sub(r"^WEBVTT.*$", "", text, flags=re.MULTILINE)
+        text = re.sub(r"^\s*\d+\s*$", "", text, flags=re.MULTILINE)
+        text = re.sub(
+            r"^\s*\d{2}:\d{2}(?::\d{2})?[,.]\d{3}\s+-->.*$",
+            "",
+            text,
+            flags=re.MULTILINE,
+        )
+
+    try:
+        result = analyze_transcript(
+            text,
+            video_title=filename,
+        )
+    except VideoProcessingError as e:
+        return {"status": "error", "error": str(e)}
+
+    _last_rag_chain = None
+    if os.getenv("ENABLE_RAG", "false").lower() == "true":
+        background_tasks.add_task(
+            build_rag_in_background,
+            result["transcript_full"],
+            result["video_id"],
+        )
+
+    return {k: v for k, v in result.items() if k != "transcript_full"}
 
 
 @app.post("/ask")
