@@ -70,8 +70,20 @@ cp .env.example .env
 # then edit .env and set MISTRAL_API_KEY
 ```
 
-You need an FFmpeg-capable system — `static-ffmpeg` bundles the binary
-automatically, so no separate install is required.
+You need an FFmpeg-capable system. The Docker image installs FFmpeg directly.
+
+### Render and YouTube access
+
+YouTube may block requests from Render's shared cloud IP addresses. If
+analysis reports that YouTube blocked the cloud IP, add `YOUTUBE_PROXY` in
+Render's environment variables using a working residential HTTP(S) proxy:
+
+```text
+YOUTUBE_PROXY=http://username:password@proxy-host:port
+```
+
+Do not commit proxy credentials to the repository. After adding the variable,
+redeploy the service.
 
 ## Run
 
