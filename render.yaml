@@ -13,8 +13,6 @@ services:
         sync: false
       - key: SARVAM_API_KEY
         sync: false
-      - key: YOUTUBE_PROXY
-        sync: false
       - key: WHISPER_MODEL
         value: tiny
       - key: EMBEDDING_MODEL

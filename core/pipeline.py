@@ -14,7 +14,6 @@ Flow:
 """
 
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
@@ -80,19 +79,11 @@ def analyze_video(url: str, language: str = "english") -> dict:
     video_id = get_video_id(url)
 
     # ── Step 1: try the fast captions path first ────────────────────────
-    try:
-        transcript = get_captions_transcript(video_id)
-    except RuntimeError as e:
-        raise VideoProcessingError(str(e)) from e
+    transcript = get_captions_transcript(video_id)
     source_used = "captions"
 
     # ── Step 2: fall back to download + Whisper if no captions exist ────
     if not transcript:
-        if not os.getenv("YOUTUBE_PROXY"):
-            raise VideoProcessingError(
-                "YouTube is blocking requests from Render. Configure a working "
-                "YOUTUBE_PROXY in Render, then try again."
-            )
         source_used = "audio_transcription"
         chunks = []
         try:

@@ -72,19 +72,6 @@ cp .env.example .env
 
 You need an FFmpeg-capable system. The Docker image installs FFmpeg directly.
 
-### Render and YouTube access
-
-YouTube may block requests from Render's shared cloud IP addresses. If
-analysis reports that YouTube blocked the cloud IP, add `YOUTUBE_PROXY` in
-Render's environment variables using a working residential HTTP(S) proxy:
-
-```text
-YOUTUBE_PROXY=http://username:password@proxy-host:port
-```
-
-Do not commit proxy credentials to the repository. After adding the variable,
-redeploy the service.
-
 RAG chat is disabled by default on Render's free instance to avoid memory
 limits. Set `ENABLE_RAG=true` only on an instance with enough memory.
 

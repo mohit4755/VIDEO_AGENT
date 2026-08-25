@@ -23,13 +23,10 @@ import yt_dlp
 from pydub import AudioSegment
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
-    IpBlocked,
-    RequestBlocked,
     TranscriptsDisabled,
     NoTranscriptFound,
     VideoUnavailable,
 )
-from youtube_transcript_api.proxies import GenericProxyConfig
 
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -37,7 +34,6 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 YOUTUBE_ID_REGEX = re.compile(
     r"(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{11})"
 )
-YOUTUBE_PROXY = os.getenv("YOUTUBE_PROXY")
 
 
 # ── URL validation / metadata ────────────────────────────────────────────────
@@ -79,12 +75,7 @@ def get_captions_transcript(video_id: str) -> str | None:
     """
     try:
         if hasattr(YouTubeTranscriptApi, "list"):
-            proxy_config = (
-                GenericProxyConfig(http_url=YOUTUBE_PROXY, https_url=YOUTUBE_PROXY)
-                if YOUTUBE_PROXY
-                else None
-            )
-            api = YouTubeTranscriptApi(proxy_config=proxy_config)
+            api = YouTubeTranscriptApi()
             transcript_list = api.list(video_id)
         elif hasattr(YouTubeTranscriptApi, "list_transcripts"):
             transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
@@ -110,11 +101,6 @@ def get_captions_transcript(video_id: str) -> str | None:
 
         joined = " ".join(texts)
         return joined.strip() or None
-    except (IpBlocked, RequestBlocked):
-        raise RuntimeError(
-            "YouTube blocked Render's cloud IP. Set YOUTUBE_PROXY to a working "
-            "residential proxy in Render."
-        )
     except (TranscriptsDisabled, NoTranscriptFound, VideoUnavailable):
         return None
     except Exception as e:
@@ -139,8 +125,6 @@ def download_youtube_audio(url: str) -> str:
         ],
         "quiet": True,
     }
-    if YOUTUBE_PROXY:
-        ydl_opts["proxy"] = YOUTUBE_PROXY
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         filename = ydl.prepare_filename(info).replace(".webm", ".wav").replace(".m4a", ".wav")
