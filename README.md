@@ -1,3 +1,13 @@
+---
+title: Video Agent
+emoji: 🎬
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Video Agent — YouTube Video Summarizer
 
 Paste a YouTube URL, get back a short summary, a detailed summary, key
