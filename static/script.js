@@ -71,6 +71,17 @@ function showError(message) {
   show(errorZone);
 }
 
+async function waitForAnalysis(jobId) {
+  const deadline = Date.now() + ANALYZE_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const res = await fetch(`/analyze/${jobId}`);
+    const data = await res.json();
+    if (data.status === "success" || data.status === "error") return data;
+  }
+  throw new Error("analysis-timeout");
+}
+
 function renderResults(data) {
   hideStatus();
   hide(errorZone);
@@ -138,12 +149,16 @@ form.addEventListener("submit", async (e) => {
       return;
     }
 
-    if (data.status === "error") {
-      showError(data.error || "Couldn't analyze this video.");
+    const finalData = data.status === "processing"
+      ? await waitForAnalysis(data.job_id)
+      : data;
+
+    if (finalData.status === "error") {
+      showError(finalData.error || "Couldn't analyze this video.");
       return;
     }
 
-    renderResults(data);
+    renderResults(finalData);
   } catch (err) {
     if (err.name === "AbortError") {
       showError("Analysis is taking too long. Try a shorter video or try again.");

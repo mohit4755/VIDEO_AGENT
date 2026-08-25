@@ -98,6 +98,9 @@ Request:
 { "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "language": "english" }
 ```
 
+The endpoint returns `202 Accepted` with a `job_id`. Poll
+`GET /analyze/{job_id}` until the response status is `success` or `error`.
+
 Success response:
 ```json
 {

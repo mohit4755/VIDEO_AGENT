@@ -14,6 +14,7 @@ Run with:
 """
 
 import os
+import uuid
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -42,6 +43,7 @@ app.add_middleware(
 # single-user demo; swap for a proper session store in production.
 _last_rag_chain = None
 _last_video_id = None
+_analysis_jobs = {}
 
 
 # ── Request / response models ────────────────────────────────────────────
@@ -88,27 +90,24 @@ def build_rag_in_background(transcript: str, video_id: str) -> None:
         print(f"RAG chain build failed (chat will be unavailable): {e}")
 
 
-@app.post("/analyze")
-def analyze(payload: AnalyzeRequest, background_tasks: BackgroundTasks):
+def run_analysis_job(job_id: str, payload: AnalyzeRequest) -> None:
     global _last_rag_chain, _last_video_id
 
+    _analysis_jobs[job_id] = {"status": "processing"}
     try:
         result = analyze_video(payload.url, language=payload.language)
     except VideoProcessingError as e:
-        # Expected, user-facing errors -> clean structured response, not a 500
-        return {
+        _analysis_jobs[job_id] = {
             "status": "error",
             "error": str(e),
-            "video_title": None,
-            "short_summary": None,
-            "detailed_summary": None,
-            "key_points": [],
-            "keywords": [],
-            "transcript_preview": None,
         }
+        return
     except Exception as e:
-        # Unexpected failure -> still respond gracefully
-        raise HTTPException(status_code=500, detail=f"Unexpected server error: {e}")
+        _analysis_jobs[job_id] = {
+            "status": "error",
+            "error": f"Unexpected server error: {e}",
+        }
+        return
 
     # RAG can exceed the free instance memory limit. Enable it explicitly
     # when a larger instance or a compatible embedding backend is available.
@@ -122,7 +121,23 @@ def analyze(payload: AnalyzeRequest, background_tasks: BackgroundTasks):
 
     # Don't ship the full transcript back over the wire by default.
     response = {k: v for k, v in result.items() if k != "transcript_full"}
-    return response
+    _analysis_jobs[job_id] = response
+
+
+@app.post("/analyze", status_code=202)
+def analyze(payload: AnalyzeRequest, background_tasks: BackgroundTasks):
+    job_id = uuid.uuid4().hex
+    _analysis_jobs[job_id] = {"status": "queued"}
+    background_tasks.add_task(run_analysis_job, job_id, payload)
+    return {"status": "processing", "job_id": job_id}
+
+
+@app.get("/analyze/{job_id}")
+def analysis_status(job_id: str):
+    job = _analysis_jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Analysis job not found.")
+    return job
 
 
 @app.post("/ask")
