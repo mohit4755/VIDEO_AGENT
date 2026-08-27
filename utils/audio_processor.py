@@ -18,7 +18,7 @@ main.py can react accordingly (skip Whisper if captions were found).
 import os
 import re
 import requests
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 
 import yt_dlp
 from pydub import AudioSegment
@@ -38,6 +38,12 @@ YOUTUBE_ID_REGEX = re.compile(
 
 
 class YouTubeSession(requests.Session):
+    def __init__(self):
+        super().__init__()
+        proxy = os.getenv("PROXY_URL")
+        if proxy:
+            self.proxies = {"http": proxy, "https": proxy}
+
     def request(self, method, url, **kwargs):
         kwargs.setdefault("timeout", 15)
         return super().request(method, url, **kwargs)
@@ -74,7 +80,7 @@ def fetch_video_title(url: str) -> str:
 
 # ── Fast path: captions via youtube-transcript-api ──────────────────────────
 
-def get_captions_transcript(video_id: str) -> str | None:
+def _get_captions_youtube_api(video_id: str) -> str | None:
     """
     Try to fetch existing captions (auto-generated or manual) for the video.
     Returns the joined transcript text, or None if no captions are available.
@@ -113,6 +119,135 @@ def get_captions_transcript(video_id: str) -> str | None:
     except Exception as e:
         print(f"Captions lookup failed ({type(e).__name__}: {e}); will fall back to audio.")
         return None
+
+
+# ── Cloud fallback: alternative transcript sources ──────────────────────────
+
+# Hardcoded fallback list; supplemented at runtime by the Piped registry.
+_PIPED_API_SEEDS = [
+    "https://pipedapi.kavin.rocks",
+    "https://pipedapi.adminforge.de",
+    "https://pipedapi.r4fo.com",
+    "https://pipedapi.darkness.services",
+    "https://pipedapi.smnz.de",
+    "https://api.piped.yt",
+]
+
+_cached_piped_instances: list | None = None
+
+
+def _discover_piped_instances() -> list:
+    """Fetch the live Piped instance list; fall back to seeds on failure."""
+    global _cached_piped_instances
+    if _cached_piped_instances is not None:
+        return _cached_piped_instances
+
+    try:
+        resp = requests.get(
+            "https://piped-instances.kavin.rocks/",
+            timeout=10,
+            headers={"Accept": "application/json"},
+        )
+        if resp.ok:
+            data = resp.json()
+            apis = [
+                inst["api_url"].rstrip("/")
+                for inst in data
+                if inst.get("api_url")
+            ]
+            if apis:
+                _cached_piped_instances = apis
+                return apis
+    except Exception:
+        pass
+
+    _cached_piped_instances = list(_PIPED_API_SEEDS)
+    return _cached_piped_instances
+
+
+def _parse_vtt_to_text(vtt_text: str) -> str:
+    """Extract plain text from WebVTT subtitle format."""
+    lines = []
+    for line in vtt_text.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith(("WEBVTT", "Kind:", "Language:", "NOTE", "##")):
+            continue
+        if "-->" in line:
+            continue
+        if re.fullmatch(r"\d+", line):
+            continue
+        clean = re.sub(r"<[^>]+>", "", line).strip()
+        if clean:
+            lines.append(clean)
+    # Deduplicate consecutive identical lines (common in auto-generated subs)
+    deduped = []
+    for line in lines:
+        if not deduped or line != deduped[-1]:
+            deduped.append(line)
+    return " ".join(deduped)
+
+
+def _get_captions_piped(video_id: str) -> str | None:
+    """Fetch transcript via public Piped API instances (bypasses cloud IP blocks)."""
+    instances = _discover_piped_instances()
+    for base in instances:
+        try:
+            resp = requests.get(f"{base}/streams/{video_id}", timeout=12)
+            if not resp.ok:
+                continue
+            subtitles = resp.json().get("subtitles", [])
+            if not subtitles:
+                continue
+
+            # Prefer English subtitles
+            sub_url = None
+            for sub in subtitles:
+                if sub.get("code", "").startswith("en"):
+                    sub_url = sub.get("url")
+                    break
+            if not sub_url:
+                sub_url = subtitles[0].get("url")
+            if not sub_url:
+                continue
+
+            sub_resp = requests.get(sub_url, timeout=12)
+            if not sub_resp.ok:
+                continue
+
+            text = _parse_vtt_to_text(sub_resp.text)
+            if text and len(text.strip()) > 20:
+                print(f"Got transcript via Piped ({base})")
+                return text
+        except Exception as e:
+            print(f"Piped {base} failed: {e}")
+            continue
+    return None
+
+
+def get_captions_transcript(video_id: str) -> str | None:
+    """
+    Try multiple sources to get the video transcript.
+
+    Strategy 1: youtube-transcript-api  (fast, works from non-cloud IPs)
+    Strategy 2: Piped public API        (works from cloud IPs, tries many instances)
+
+    Set PROXY_URL in .env to route Strategy 1 through a proxy.
+    """
+    transcript = _get_captions_youtube_api(video_id)
+    if transcript:
+        return transcript
+
+    print("Direct YouTube API failed; trying Piped instances...")
+
+    transcript = _get_captions_piped(video_id)
+    if transcript:
+        return transcript
+
+    print("All transcript sources failed.")
+    return None
+
 
 
 # ── Fallback path: original download + Whisper pipeline ─────────────────────

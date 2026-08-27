@@ -46,20 +46,15 @@ def analyze_video(url: str, language: str = "english") -> dict:
 
     video_id = get_video_id(url)
 
-    # ── Step 1: try the fast captions path first ────────────────────────
+    # ── Step 1: try all available transcript sources ────────────────────
     transcript = get_captions_transcript(video_id)
     source_used = "captions"
 
-    # ── Step 2: fall back to download + Whisper if no captions exist ────
-    if not transcript:
-        raise VideoProcessingError(
-            "YouTube captions are unavailable from this server. "
-            "Audio fallback is disabled because this service does not use a proxy."
-        )
-
     if not transcript or len(transcript.strip()) < 20:
         raise VideoProcessingError(
-            "This video doesn't have usable captions or speech content to summarize."
+            "Could not retrieve usable captions for this video. "
+            "The video may not have captions, or all transcript sources "
+            "are currently unavailable. Please try again in a few minutes."
         )
 
     try:

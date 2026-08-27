@@ -113,11 +113,13 @@ def run_analysis_job(job_id: str, payload: AnalyzeRequest) -> None:
     # when a larger instance or a compatible embedding backend is available.
     _last_rag_chain = None
     if os.getenv("ENABLE_RAG", "false").lower() == "true":
-        background_tasks.add_task(
-            build_rag_in_background,
-            result["transcript_full"],
-            result["video_id"],
-        )
+        try:
+            build_rag_in_background(
+                result["transcript_full"],
+                result["video_id"],
+            )
+        except Exception as e:
+            print(f"RAG build failed in background: {e}")
 
     # Don't ship the full transcript back over the wire by default.
     response = {k: v for k, v in result.items() if k != "transcript_full"}
