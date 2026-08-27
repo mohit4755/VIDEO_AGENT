@@ -71,11 +71,26 @@ def is_valid_youtube_url(url: str) -> bool:
 
 
 def fetch_video_title(url: str) -> str:
-    """Get the title without downloading anything (fast metadata-only call)."""
-    ydl_opts = {"quiet": True, "skip_download": True, "noplaylist": True}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        return info.get("title", "Untitled Video")
+    """Get the title using YouTube oEmbed (fast, lightweight, works on cloud hosts), falling back to yt-dlp."""
+    video_id = get_video_id(url)
+    if video_id:
+        try:
+            oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+            resp = requests.get(oembed_url, timeout=5)
+            if resp.ok:
+                title = resp.json().get("title")
+                if title:
+                    return title.strip()
+        except Exception:
+            pass
+
+    try:
+        ydl_opts = {"quiet": True, "skip_download": True, "noplaylist": True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            return info.get("title", f"YouTube video {video_id}" if video_id else "Untitled Video")
+    except Exception:
+        return f"YouTube video {video_id}" if video_id else "Untitled Video"
 
 
 # ── Fast path: captions via youtube-transcript-api ──────────────────────────

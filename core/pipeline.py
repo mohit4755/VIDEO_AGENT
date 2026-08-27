@@ -24,6 +24,7 @@ from utils.audio_processor import (
     is_valid_youtube_url,
     get_video_id,
     get_captions_transcript,
+    fetch_video_title,
 )
 from langchain_mistralai import ChatMistralAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -87,10 +88,12 @@ def analyze_video(url: str, language: str = "english") -> dict:
     except Exception as e:
         raise VideoProcessingError(f"AI analysis failed: {e}") from e
 
+    video_title = fetch_video_title(url)
+
     return {
         "status": "success",
         "video_id": video_id,
-        "video_title": f"YouTube video {video_id}",
+        "video_title": video_title,
         "source_used": "captions",
         "short_summary": short_summary.strip(),
         "detailed_summary": detailed_summary.strip(),

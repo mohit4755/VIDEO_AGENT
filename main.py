@@ -44,6 +44,16 @@ app.add_middleware(
 _last_rag_chain = None
 _last_video_id = None
 _analysis_jobs = {}
+MAX_STORED_JOBS = 100
+
+
+def _set_job_status(job_id: str, data: dict) -> None:
+    """Store job status with LRU-style eviction to prevent memory leaks."""
+    if len(_analysis_jobs) >= MAX_STORED_JOBS and job_id not in _analysis_jobs:
+        oldest_key = next(iter(_analysis_jobs))
+        _analysis_jobs.pop(oldest_key, None)
+    _analysis_jobs[job_id] = data
+
 
 
 # ── Request / response models ────────────────────────────────────────────
@@ -93,20 +103,20 @@ def build_rag_in_background(transcript: str, video_id: str) -> None:
 def run_analysis_job(job_id: str, payload: AnalyzeRequest) -> None:
     global _last_rag_chain, _last_video_id
 
-    _analysis_jobs[job_id] = {"status": "processing"}
+    _set_job_status(job_id, {"status": "processing"})
     try:
         result = analyze_video(payload.url, language=payload.language)
     except VideoProcessingError as e:
-        _analysis_jobs[job_id] = {
+        _set_job_status(job_id, {
             "status": "error",
             "error": str(e),
-        }
+        })
         return
     except Exception as e:
-        _analysis_jobs[job_id] = {
+        _set_job_status(job_id, {
             "status": "error",
             "error": f"Unexpected server error: {e}",
-        }
+        })
         return
 
     # RAG can exceed the free instance memory limit. Enable it explicitly
@@ -123,13 +133,13 @@ def run_analysis_job(job_id: str, payload: AnalyzeRequest) -> None:
 
     # Don't ship the full transcript back over the wire by default.
     response = {k: v for k, v in result.items() if k != "transcript_full"}
-    _analysis_jobs[job_id] = response
+    _set_job_status(job_id, response)
 
 
 @app.post("/analyze", status_code=202)
 def analyze(payload: AnalyzeRequest, background_tasks: BackgroundTasks):
     job_id = uuid.uuid4().hex
-    _analysis_jobs[job_id] = {"status": "queued"}
+    _set_job_status(job_id, {"status": "queued"})
     background_tasks.add_task(run_analysis_job, job_id, payload)
     return {"status": "processing", "job_id": job_id}
 
