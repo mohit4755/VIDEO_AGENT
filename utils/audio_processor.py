@@ -15,9 +15,11 @@ process_input() now returns a dict describing which path was used so
 main.py can react accordingly (skip Whisper if captions were found).
 """
 
+import glob
 import json
 import os
 import re
+import tempfile
 import requests
 from urllib.parse import urlparse, parse_qs, quote
 
@@ -260,79 +262,84 @@ def _parse_json3_captions(json3_text: str) -> str:
         return ""
 
 
+def _parse_subtitle_file(file_path: str) -> str:
+    """Read and clean plain text from downloaded VTT or SRT subtitle file."""
+    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+
+    lines = []
+    for line in content.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith(("WEBVTT", "Kind:", "Language:", "NOTE", "##")):
+            continue
+        if "-->" in line:
+            continue
+        if re.fullmatch(r"\d+", line):
+            continue
+        clean = re.sub(r"<[^>]+>", "", line).strip()
+        if clean:
+            lines.append(clean)
+
+    # Deduplicate consecutive identical lines (common in auto-generated subs)
+    deduped = []
+    for line in lines:
+        if not deduped or line != deduped[-1]:
+            deduped.append(line)
+    return " ".join(deduped).strip()
+
+
 def _get_captions_ytdlp(video_id: str) -> str | None:
     """
-    Fetch captions using yt-dlp with mobile Innertube client emulation.
+    Fetch captions using yt-dlp native downloader with mobile Innertube client emulation.
     Bypasses cloud provider IP blocks (Render, GCP, AWS) without audio downloads.
     """
     url = f"https://www.youtube.com/watch?v={video_id}"
-    ydl_opts = {
-        "skip_download": True,
-        "quiet": True,
-        "no_warnings": True,
-        "noplaylist": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios", "web"],
-            }
-        },
-    }
-    proxy = os.getenv("PROXY_URL")
-    if proxy:
-        ydl_opts["proxy"] = proxy
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_template = os.path.join(tmpdir, "%(id)s.%(ext)s")
+        ydl_opts = {
+            "skip_download": True,
+            "writesubtitles": True,
+            "writeautomaticsub": True,
+            "subtitleslangs": ["en", "en-US", "en-GB", "en-orig"],
+            "subtitlesformat": "vtt/srt/best",
+            "outtmpl": out_template,
+            "quiet": True,
+            "no_warnings": True,
+            "noplaylist": True,
+            "ignoreerrors": True,
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["ios", "android", "mweb", "web"],
+                }
+            },
+        }
+        proxy = os.getenv("PROXY_URL")
+        if proxy:
+            ydl_opts["proxy"] = proxy
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            subtitles = info.get("subtitles") or {}
-            auto_caps = info.get("automatic_captions") or {}
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
 
-            target_langs = ["en", "en-US", "en-GB", "en-orig", "en-CA", "en-IN"]
-            selected_formats = None
+            sub_files = glob.glob(os.path.join(tmpdir, "*.vtt")) + glob.glob(os.path.join(tmpdir, "*.srt"))
+            if not sub_files:
+                sub_files = glob.glob(os.path.join(tmpdir, "*"))
 
-            for lang in target_langs:
-                if lang in subtitles:
-                    selected_formats = subtitles[lang]
-                    break
-
-            if not selected_formats:
-                for lang in target_langs:
-                    if lang in auto_caps:
-                        selected_formats = auto_caps[lang]
-                        break
-
-            if not selected_formats:
-                if subtitles:
-                    first_lang = next(iter(subtitles))
-                    selected_formats = subtitles[first_lang]
-                elif auto_caps:
-                    first_lang = next(iter(auto_caps))
-                    selected_formats = auto_caps[first_lang]
-
-            if not selected_formats:
+            if not sub_files:
                 return None
 
-            fmt_dict = {f.get("ext"): f.get("url") for f in selected_formats if f.get("url")}
+            en_files = [f for f in sub_files if ".en" in f.lower()]
+            target_file = en_files[0] if en_files else sub_files[0]
 
-            if "json3" in fmt_dict:
-                resp = requests.get(fmt_dict["json3"], timeout=15)
-                if resp.ok:
-                    text = _parse_json3_captions(resp.text)
-                    if text and len(text) > 20:
-                        print("Got transcript via yt-dlp (json3)")
-                        return text
-
-            if "vtt" in fmt_dict:
-                resp = requests.get(fmt_dict["vtt"], timeout=15)
-                if resp.ok:
-                    text = _parse_vtt_to_text(resp.text)
-                    if text and len(text) > 20:
-                        print("Got transcript via yt-dlp (vtt)")
-                        return text
-
-    except Exception as e:
-        print(f"yt-dlp subtitle fetch error: {e}")
-        return None
+            text = _parse_subtitle_file(target_file)
+            if text and len(text) > 20:
+                print("Got transcript via yt-dlp native downloader")
+                return text
+        except Exception as e:
+            print(f"yt-dlp subtitle download failed: {e}")
+            return None
 
     return None
 
