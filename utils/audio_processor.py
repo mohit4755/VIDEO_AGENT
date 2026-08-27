@@ -15,6 +15,7 @@ process_input() now returns a dict describing which path was used so
 main.py can react accordingly (skip Whisper if captions were found).
 """
 
+import json
 import os
 import re
 import requests
@@ -241,21 +242,121 @@ def _get_captions_piped(video_id: str) -> str | None:
     return None
 
 
+def _parse_json3_captions(json3_text: str) -> str:
+    """Extract and format plain text from YouTube json3 format subtitles."""
+    try:
+        data = json.loads(json3_text)
+        events = data.get("events", [])
+        lines = []
+        for ev in events:
+            segs = ev.get("segs", [])
+            seg_text = "".join(s.get("utf8", "") for s in segs).strip()
+            if seg_text and seg_text != "\n":
+                clean = re.sub(r"\s+", " ", seg_text)
+                if clean:
+                    lines.append(clean)
+        return " ".join(lines).strip()
+    except Exception:
+        return ""
+
+
+def _get_captions_ytdlp(video_id: str) -> str | None:
+    """
+    Fetch captions using yt-dlp with mobile Innertube client emulation.
+    Bypasses cloud provider IP blocks (Render, GCP, AWS) without audio downloads.
+    """
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    ydl_opts = {
+        "skip_download": True,
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "web"],
+            }
+        },
+    }
+    proxy = os.getenv("PROXY_URL")
+    if proxy:
+        ydl_opts["proxy"] = proxy
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            subtitles = info.get("subtitles") or {}
+            auto_caps = info.get("automatic_captions") or {}
+
+            target_langs = ["en", "en-US", "en-GB", "en-orig", "en-CA", "en-IN"]
+            selected_formats = None
+
+            for lang in target_langs:
+                if lang in subtitles:
+                    selected_formats = subtitles[lang]
+                    break
+
+            if not selected_formats:
+                for lang in target_langs:
+                    if lang in auto_caps:
+                        selected_formats = auto_caps[lang]
+                        break
+
+            if not selected_formats:
+                if subtitles:
+                    first_lang = next(iter(subtitles))
+                    selected_formats = subtitles[first_lang]
+                elif auto_caps:
+                    first_lang = next(iter(auto_caps))
+                    selected_formats = auto_caps[first_lang]
+
+            if not selected_formats:
+                return None
+
+            fmt_dict = {f.get("ext"): f.get("url") for f in selected_formats if f.get("url")}
+
+            if "json3" in fmt_dict:
+                resp = requests.get(fmt_dict["json3"], timeout=15)
+                if resp.ok:
+                    text = _parse_json3_captions(resp.text)
+                    if text and len(text) > 20:
+                        print("Got transcript via yt-dlp (json3)")
+                        return text
+
+            if "vtt" in fmt_dict:
+                resp = requests.get(fmt_dict["vtt"], timeout=15)
+                if resp.ok:
+                    text = _parse_vtt_to_text(resp.text)
+                    if text and len(text) > 20:
+                        print("Got transcript via yt-dlp (vtt)")
+                        return text
+
+    except Exception as e:
+        print(f"yt-dlp subtitle fetch error: {e}")
+        return None
+
+    return None
+
+
 def get_captions_transcript(video_id: str) -> str | None:
     """
     Try multiple sources to get the video transcript.
 
     Strategy 1: youtube-transcript-api  (fast, works from non-cloud IPs)
-    Strategy 2: Piped public API        (works from cloud IPs, tries many instances)
+    Strategy 2: yt-dlp Innertube engine (bypasses cloud IP bans on Render/AWS/GCP)
+    Strategy 3: Piped public API        (fallback proxy instances)
 
-    Set PROXY_URL in .env to route Strategy 1 through a proxy.
+    Set PROXY_URL in .env to route requests through a custom proxy.
     """
     transcript = _get_captions_youtube_api(video_id)
     if transcript:
         return transcript
 
-    print("Direct YouTube API failed; trying Piped instances...")
+    print("Direct YouTube API failed; trying yt-dlp Innertube engine...")
+    transcript = _get_captions_ytdlp(video_id)
+    if transcript:
+        return transcript
 
+    print("yt-dlp engine failed; trying Piped instances...")
     transcript = _get_captions_piped(video_id)
     if transcript:
         return transcript
